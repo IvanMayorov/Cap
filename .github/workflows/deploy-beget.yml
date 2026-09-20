@@ -26,6 +26,14 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_S3_ENDPOINT: ${{ secrets.R2_S3_ENDPOINT }}
+          ASSEMBLY_API_KEY: ${{ secrets.ASSEMBLY_API_KEY }}
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           test -n "$R2_ACCESS_KEY_ID"
@@ -34,15 +42,39 @@ jobs:
           R2_ACCESS_KEY_ID_B64=$(printf '%s' "$R2_ACCESS_KEY_ID" | base64 | tr -d '\n')
           R2_SECRET_ACCESS_KEY_B64=$(printf '%s' "$R2_SECRET_ACCESS_KEY" | base64 | tr -d '\n')
           R2_S3_ENDPOINT_B64=$(printf '%s' "$R2_S3_ENDPOINT" | base64 | tr -d '\n')
+          ASSEMBLY_API_KEY_B64=$(printf '%s' "$ASSEMBLY_API_KEY" | base64 | tr -d '\n')
+          AI_PROVIDER_B64=$(printf '%s' "$AI_PROVIDER" | base64 | tr -d '\n')
+          AI_MODEL_B64=$(printf '%s' "$AI_MODEL" | base64 | tr -d '\n')
+          AI_BASE_URL_B64=$(printf '%s' "$AI_BASE_URL" | base64 | tr -d '\n')
+          AI_API_KEY_B64=$(printf '%s' "$AI_API_KEY" | base64 | tr -d '\n')
+          GROQ_API_KEY_B64=$(printf '%s' "$GROQ_API_KEY" | base64 | tr -d '\n')
+          OPENAI_API_KEY_B64=$(printf '%s' "$OPENAI_API_KEY" | base64 | tr -d '\n')
+          ANTHROPIC_API_KEY_B64=$(printf '%s' "$ANTHROPIC_API_KEY" | base64 | tr -d '\n')
           REPOSITORY_URL="$REPOSITORY_URL" \
           R2_ACCESS_KEY_ID_B64="$R2_ACCESS_KEY_ID_B64" \
           R2_SECRET_ACCESS_KEY_B64="$R2_SECRET_ACCESS_KEY_B64" \
-          R2_S3_ENDPOINT_B64="$R2_S3_ENDPOINT_B64" bash -s <<'REMOTE'
+          R2_S3_ENDPOINT_B64="$R2_S3_ENDPOINT_B64" \
+          ASSEMBLY_API_KEY_B64="$ASSEMBLY_API_KEY_B64" \
+          AI_PROVIDER_B64="$AI_PROVIDER_B64" \
+          AI_MODEL_B64="$AI_MODEL_B64" \
+          AI_BASE_URL_B64="$AI_BASE_URL_B64" \
+          AI_API_KEY_B64="$AI_API_KEY_B64" \
+          GROQ_API_KEY_B64="$GROQ_API_KEY_B64" \
+          OPENAI_API_KEY_B64="$OPENAI_API_KEY_B64" \
+          ANTHROPIC_API_KEY_B64="$ANTHROPIC_API_KEY_B64" bash -s <<'REMOTE'
           set -euo pipefail
 
           R2_ACCESS_KEY_ID=$(printf '%s' "$R2_ACCESS_KEY_ID_B64" | base64 -d)
           R2_SECRET_ACCESS_KEY=$(printf '%s' "$R2_SECRET_ACCESS_KEY_B64" | base64 -d)
           R2_S3_ENDPOINT=$(printf '%s' "$R2_S3_ENDPOINT_B64" | base64 -d)
+          ASSEMBLY_API_KEY=$(printf '%s' "$ASSEMBLY_API_KEY_B64" | base64 -d)
+          AI_PROVIDER=$(printf '%s' "$AI_PROVIDER_B64" | base64 -d)
+          AI_MODEL=$(printf '%s' "$AI_MODEL_B64" | base64 -d)
+          AI_BASE_URL=$(printf '%s' "$AI_BASE_URL_B64" | base64 -d)
+          AI_API_KEY=$(printf '%s' "$AI_API_KEY_B64" | base64 -d)
+          GROQ_API_KEY=$(printf '%s' "$GROQ_API_KEY_B64" | base64 -d)
+          OPENAI_API_KEY=$(printf '%s' "$OPENAI_API_KEY_B64" | base64 -d)
+          ANTHROPIC_API_KEY=$(printf '%s' "$ANTHROPIC_API_KEY_B64" | base64 -d)
 
           install -d -m 700 /opt/cap
           if [ ! -d /opt/cap/.git ]; then
@@ -77,6 +109,19 @@ jobs:
           RESEND_API_KEY=
           RESEND_FROM_DOMAIN=
           EOF
+
+          if [ -n "$ASSEMBLY_API_KEY" ]; then printf 'ASSEMBLY_API_KEY=%s\n' "$ASSEMBLY_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$GROQ_API_KEY" ]; then printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$OPENAI_API_KEY" ]; then printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$ANTHROPIC_API_KEY" ]; then printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$AI_API_KEY" ]; then printf 'AI_API_KEY=%s\n' "$AI_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$AI_BASE_URL" ]; then printf 'AI_BASE_URL=%s\n' "$AI_BASE_URL" >> /opt/cap/.env; fi
+          if [ -n "$AI_MODEL" ]; then printf 'AI_MODEL=%s\n' "$AI_MODEL" >> /opt/cap/.env; fi
+          if [ -n "$AI_PROVIDER" ]; then
+            printf 'AI_PROVIDER=%s\n' "$AI_PROVIDER" >> /opt/cap/.env
+          elif [ -n "$ASSEMBLY_API_KEY" ] && [ -z "$GROQ_API_KEY" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            printf 'AI_PROVIDER=assemblyai\n' >> /opt/cap/.env
+          fi
 
           docker compose -f /opt/cap/docker-compose.r2.yml pull
           docker compose -f /opt/cap/docker-compose.r2.yml up -d
