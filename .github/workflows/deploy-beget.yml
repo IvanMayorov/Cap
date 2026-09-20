@@ -1,6 +1,11 @@
 name: Deploy Cap to Beget
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - docker-compose.r2.yml
+      - .github/workflows/deploy-beget.yml
   workflow_dispatch:
 
 concurrency:
