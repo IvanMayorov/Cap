@@ -1,0 +1,108 @@
+name: cap
+
+services:
+  cap-web:
+    image: ghcr.io/capsoftware/cap-web:latest
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql://cap:${MYSQL_PASSWORD}@mysql:3306/cap
+      WEB_URL: ${CAP_URL}
+      NEXTAUTH_URL: ${CAP_URL}
+      DATABASE_ENCRYPTION_KEY: ${DATABASE_ENCRYPTION_KEY}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      CAP_AWS_ACCESS_KEY: ${CAP_AWS_ACCESS_KEY}
+      CAP_AWS_SECRET_KEY: ${CAP_AWS_SECRET_KEY}
+      CAP_AWS_BUCKET: ${CAP_AWS_BUCKET}
+      CAP_AWS_REGION: ${CAP_AWS_REGION}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT}
+      S3_INTERNAL_ENDPOINT: ${S3_INTERNAL_ENDPOINT}
+      S3_PATH_STYLE: ${S3_PATH_STYLE}
+      CAP_VIDEOS_DEFAULT_PUBLIC: ${CAP_VIDEOS_DEFAULT_PUBLIC}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_DOMAIN: ${RESEND_FROM_DOMAIN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_CLIENT_SECRET: ${APPLE_CLIENT_SECRET:-}
+      MEDIA_SERVER_URL: http://media-server:3456
+      MEDIA_SERVER_WEBHOOK_SECRET: ${MEDIA_SERVER_WEBHOOK_SECRET}
+      MEDIA_SERVER_WEBHOOK_URL: http://cap-web:3000
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - cap-network
+      - traefik-network
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-network
+      traefik.http.middlewares.cap-https.redirectscheme.scheme: https
+      traefik.http.routers.cap-http.entrypoints: web
+      traefik.http.routers.cap-http.rule: Host(`cap.mayorov.team`)
+      traefik.http.routers.cap-http.middlewares: cap-https@docker
+      traefik.http.routers.cap-http.service: cap-web
+      traefik.http.routers.cap.entrypoints: websecure
+      traefik.http.routers.cap.rule: Host(`cap.mayorov.team`)
+      traefik.http.routers.cap.service: cap-web
+      traefik.http.routers.cap.tls: "true"
+      traefik.http.routers.cap.tls.certresolver: mytlschallenge
+      traefik.http.routers.cap.tls.domains[0].main: mayorov.team
+      traefik.http.routers.cap.tls.domains[0].sans: cap.mayorov.team
+      traefik.http.services.cap-web.loadbalancer.server.port: "3000"
+
+  media-server:
+    image: ghcr.io/capsoftware/cap-media-server:latest
+    restart: unless-stopped
+    environment:
+      PORT: 3456
+      MEDIA_SERVER_WEBHOOK_SECRET: ${MEDIA_SERVER_WEBHOOK_SECRET}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3456/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cap-network
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: cap
+      MYSQL_USER: cap
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    command:
+      - --max_connections=1000
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - cap-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "cap", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - cap-network
+
+volumes:
+  cap-mysql-data:
+
+networks:
+  cap-network:
+    driver: bridge
+  traefik-network:
+    external: true
