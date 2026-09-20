@@ -114,11 +114,15 @@ jobs:
           if [ -n "$GROQ_API_KEY" ]; then printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> /opt/cap/.env; fi
           if [ -n "$OPENAI_API_KEY" ]; then printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> /opt/cap/.env; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY" >> /opt/cap/.env; fi
-          if [ -n "$AI_API_KEY" ]; then printf 'AI_API_KEY=%s\n' "$AI_API_KEY" >> /opt/cap/.env; fi
-          if [ -n "$AI_BASE_URL" ]; then printf 'AI_BASE_URL=%s\n' "$AI_BASE_URL" >> /opt/cap/.env; fi
-          if [ -n "$AI_MODEL" ]; then printf 'AI_MODEL=%s\n' "$AI_MODEL" >> /opt/cap/.env; fi
-          if [ -n "$AI_PROVIDER" ]; then
+          if [ -n "$AI_API_KEY" ]; then
+            printf 'AI_API_KEY=%s\n' "$AI_API_KEY" >> /opt/cap/.env
+            printf 'AI_BASE_URL=%s\n' "${AI_BASE_URL:-https://api.hydraai.ru/v1}" >> /opt/cap/.env
+            printf 'AI_MODEL=%s\n' "${AI_MODEL:-hydra-gpt}" >> /opt/cap/.env
+            printf 'AI_PROVIDER=%s\n' "${AI_PROVIDER:-openai-compatible}" >> /opt/cap/.env
+          elif [ -n "$AI_PROVIDER" ]; then
             printf 'AI_PROVIDER=%s\n' "$AI_PROVIDER" >> /opt/cap/.env
+            if [ -n "$AI_BASE_URL" ]; then printf 'AI_BASE_URL=%s\n' "$AI_BASE_URL" >> /opt/cap/.env; fi
+            if [ -n "$AI_MODEL" ]; then printf 'AI_MODEL=%s\n' "$AI_MODEL" >> /opt/cap/.env; fi
           elif [ -n "$ASSEMBLY_API_KEY" ] && [ -z "$GROQ_API_KEY" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
             printf 'AI_PROVIDER=assemblyai\n' >> /opt/cap/.env
           fi
