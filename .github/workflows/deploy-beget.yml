@@ -1,0 +1,88 @@
+name: Deploy Cap to Beget
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: cap-beget-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, cap-beget]
+    timeout-minutes: 20
+    steps:
+      - name: Deploy Cap with R2
+        env:
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_S3_ENDPOINT: ${{ secrets.R2_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          test -n "$R2_ACCESS_KEY_ID"
+          test -n "$R2_SECRET_ACCESS_KEY"
+          test -n "$R2_S3_ENDPOINT"
+          R2_ACCESS_KEY_ID_B64=$(printf '%s' "$R2_ACCESS_KEY_ID" | base64 | tr -d '\n')
+          R2_SECRET_ACCESS_KEY_B64=$(printf '%s' "$R2_SECRET_ACCESS_KEY" | base64 | tr -d '\n')
+          R2_S3_ENDPOINT_B64=$(printf '%s' "$R2_S3_ENDPOINT" | base64 | tr -d '\n')
+          REPOSITORY_URL="$REPOSITORY_URL" \
+          R2_ACCESS_KEY_ID_B64="$R2_ACCESS_KEY_ID_B64" \
+          R2_SECRET_ACCESS_KEY_B64="$R2_SECRET_ACCESS_KEY_B64" \
+          R2_S3_ENDPOINT_B64="$R2_S3_ENDPOINT_B64" bash -s <<'REMOTE'
+          set -euo pipefail
+
+          R2_ACCESS_KEY_ID=$(printf '%s' "$R2_ACCESS_KEY_ID_B64" | base64 -d)
+          R2_SECRET_ACCESS_KEY=$(printf '%s' "$R2_SECRET_ACCESS_KEY_B64" | base64 -d)
+          R2_S3_ENDPOINT=$(printf '%s' "$R2_S3_ENDPOINT_B64" | base64 -d)
+
+          install -d -m 700 /opt/cap
+          if [ ! -d /opt/cap/.git ]; then
+            git clone --depth=1 "$REPOSITORY_URL" /opt/cap
+          else
+            git -C /opt/cap fetch --depth=1 origin main
+            git -C /opt/cap checkout -B main origin/main
+          fi
+
+          umask 077
+          if [ ! -f /opt/cap/.env.generated ]; then
+            cat > /opt/cap/.env.generated <<EOF
+          MYSQL_PASSWORD=$(openssl rand -hex 32)
+          MYSQL_ROOT_PASSWORD=$(openssl rand -hex 32)
+          DATABASE_ENCRYPTION_KEY=$(openssl rand -hex 32)
+          NEXTAUTH_SECRET=$(openssl rand -hex 32)
+          MEDIA_SERVER_WEBHOOK_SECRET=$(openssl rand -hex 32)
+          EOF
+          fi
+
+          cat /opt/cap/.env.generated > /opt/cap/.env
+          cat >> /opt/cap/.env <<EOF
+          CAP_URL=https://cap.mayorov.team
+          S3_PUBLIC_ENDPOINT=$R2_S3_ENDPOINT
+          S3_INTERNAL_ENDPOINT=$R2_S3_ENDPOINT
+          CAP_AWS_ACCESS_KEY=$R2_ACCESS_KEY_ID
+          CAP_AWS_SECRET_KEY=$R2_SECRET_ACCESS_KEY
+          CAP_AWS_BUCKET=cap-media
+          CAP_AWS_REGION=auto
+          S3_PATH_STYLE=true
+          CAP_VIDEOS_DEFAULT_PUBLIC=true
+          RESEND_API_KEY=
+          RESEND_FROM_DOMAIN=
+          EOF
+
+          docker compose -f /opt/cap/docker-compose.r2.yml pull
+          docker compose -f /opt/cap/docker-compose.r2.yml up -d
+          docker compose -f /opt/cap/docker-compose.r2.yml ps
+
+          for attempt in $(seq 1 20); do
+            if curl -fsS --max-time 10 https://cap.mayorov.team/ >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f /opt/cap/docker-compose.r2.yml ps
+          exit 1
+          REMOTE
