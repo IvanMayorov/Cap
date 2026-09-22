@@ -20,12 +20,18 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   deploy:
     runs-on: [self-hosted, cap-beget]
     timeout-minutes: 20
     steps:
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Deploy Cap with selected storage
         env:
           REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}.git
@@ -179,6 +185,10 @@ jobs:
           EOF
           fi
 
+          if ! grep -q '^CRON_SECRET=' /opt/cap/.env.generated; then
+            printf 'CRON_SECRET=%s\n' "$(openssl rand -hex 32)" >> /opt/cap/.env.generated
+          fi
+
           cat /opt/cap/.env.generated > /opt/cap/.env
           cat >> /opt/cap/.env <<EOF
           CAP_URL=https://cap.mayorov.team
@@ -224,3 +234,7 @@ jobs:
           docker compose -f /opt/cap/docker-compose.r2.yml ps
           exit 1
           REMOTE
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
