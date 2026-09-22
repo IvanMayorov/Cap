@@ -26,7 +26,7 @@ jobs:
     runs-on: [self-hosted, cap-beget]
     timeout-minutes: 20
     steps:
-      - name: Deploy Cap with R2
+      - name: Deploy Cap with selected storage
         env:
           REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}.git
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -100,6 +100,11 @@ jobs:
             git -C /opt/cap checkout -B main origin/main
           fi
 
+          STORAGE_BACKEND=r2
+          if [ -f /opt/cap/.env ] && grep -q '^CAP_AWS_BUCKET=d5e16f195c6b-cap$' /opt/cap/.env; then
+            STORAGE_BACKEND=beget
+          fi
+
           STORAGE_ENDPOINT="$R2_S3_ENDPOINT"
           STORAGE_BUCKET=cap-media
           STORAGE_REGION=auto
@@ -149,6 +154,15 @@ jobs:
             rm -f "$RCLONE_CONFIG"
             STORAGE_ENDPOINT="$BEGET_S3_ENDPOINT"
             STORAGE_BUCKET="$BEGET_S3_BUCKET"
+            STORAGE_REGION=ru1
+            STORAGE_ACCESS_KEY="$BEGET_S3_ACCESS_KEY_ID"
+            STORAGE_SECRET_KEY="$BEGET_S3_SECRET_ACCESS_KEY"
+            STORAGE_BACKEND=beget
+          elif [ "$STORAGE_BACKEND" = "beget" ]; then
+            test -n "$BEGET_S3_ACCESS_KEY_ID"
+            test -n "$BEGET_S3_SECRET_ACCESS_KEY"
+            STORAGE_ENDPOINT=https://s3.ru1.storage.beget.cloud
+            STORAGE_BUCKET=d5e16f195c6b-cap
             STORAGE_REGION=ru1
             STORAGE_ACCESS_KEY="$BEGET_S3_ACCESS_KEY_ID"
             STORAGE_SECRET_KEY="$BEGET_S3_SECRET_ACCESS_KEY"
