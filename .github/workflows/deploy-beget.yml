@@ -112,30 +112,6 @@ jobs:
             BEGET_S3_ENDPOINT=https://s3.ru1.storage.beget.cloud
             BEGET_S3_BUCKET=d5e16f195c6b-cap
 
-            cat > /tmp/cap-beget-cors.json <<'CORS'
-          {
-            "CORSRules": [
-              {
-                "AllowedOrigins": ["https://cap.mayorov.team"],
-                "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
-                "AllowedHeaders": ["*"],
-                "MaxAgeSeconds": 3600
-              }
-            ]
-          }
-          CORS
-
-            docker run --rm \
-              -e AWS_ACCESS_KEY_ID="$BEGET_S3_ACCESS_KEY_ID" \
-              -e AWS_SECRET_ACCESS_KEY="$BEGET_S3_SECRET_ACCESS_KEY" \
-              -e AWS_DEFAULT_REGION=ru1 \
-              -e AWS_PAGER= \
-              -v /tmp/cap-beget-cors.json:/tmp/cors.json:ro \
-              amazon/aws-cli:2.27.42 s3api put-bucket-cors \
-              --bucket "$BEGET_S3_BUCKET" \
-              --endpoint-url "$BEGET_S3_ENDPOINT" \
-              --cors-configuration file:///tmp/cors.json
-
             RCLONE_CONFIG=/tmp/cap-rclone.conf
             umask 077
             cat > "$RCLONE_CONFIG" <<EOF
@@ -170,7 +146,7 @@ jobs:
               r2:cap-media beget:"$BEGET_S3_BUCKET" \
               --one-way --size-only
 
-            rm -f "$RCLONE_CONFIG" /tmp/cap-beget-cors.json
+            rm -f "$RCLONE_CONFIG"
             STORAGE_ENDPOINT="$BEGET_S3_ENDPOINT"
             STORAGE_BUCKET="$BEGET_S3_BUCKET"
             STORAGE_REGION=ru1
