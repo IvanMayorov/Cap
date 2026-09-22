@@ -7,6 +7,12 @@ on:
       - docker-compose.r2.yml
       - .github/workflows/deploy-beget.yml
   workflow_dispatch:
+    inputs:
+      migrate_to_beget:
+        description: Migrate existing R2 objects and switch Cap to Beget S3
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: cap-beget-production
@@ -26,6 +32,9 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_S3_ENDPOINT: ${{ secrets.R2_S3_ENDPOINT }}
+          BEGET_S3_ACCESS_KEY_ID: ${{ secrets.BEGET_S3_ACCESS_KEY_ID }}
+          BEGET_S3_SECRET_ACCESS_KEY: ${{ secrets.BEGET_S3_SECRET_ACCESS_KEY }}
+          MIGRATE_TO_BEGET: ${{ inputs.migrate_to_beget }}
           ASSEMBLY_API_KEY: ${{ secrets.ASSEMBLY_API_KEY }}
           AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
           AI_MODEL: ${{ secrets.AI_MODEL }}
@@ -42,6 +51,8 @@ jobs:
           R2_ACCESS_KEY_ID_B64=$(printf '%s' "$R2_ACCESS_KEY_ID" | base64 | tr -d '\n')
           R2_SECRET_ACCESS_KEY_B64=$(printf '%s' "$R2_SECRET_ACCESS_KEY" | base64 | tr -d '\n')
           R2_S3_ENDPOINT_B64=$(printf '%s' "$R2_S3_ENDPOINT" | base64 | tr -d '\n')
+          BEGET_S3_ACCESS_KEY_ID_B64=$(printf '%s' "$BEGET_S3_ACCESS_KEY_ID" | base64 | tr -d '\n')
+          BEGET_S3_SECRET_ACCESS_KEY_B64=$(printf '%s' "$BEGET_S3_SECRET_ACCESS_KEY" | base64 | tr -d '\n')
           ASSEMBLY_API_KEY_B64=$(printf '%s' "$ASSEMBLY_API_KEY" | base64 | tr -d '\n')
           AI_PROVIDER_B64=$(printf '%s' "$AI_PROVIDER" | base64 | tr -d '\n')
           AI_MODEL_B64=$(printf '%s' "$AI_MODEL" | base64 | tr -d '\n')
@@ -54,6 +65,9 @@ jobs:
           R2_ACCESS_KEY_ID_B64="$R2_ACCESS_KEY_ID_B64" \
           R2_SECRET_ACCESS_KEY_B64="$R2_SECRET_ACCESS_KEY_B64" \
           R2_S3_ENDPOINT_B64="$R2_S3_ENDPOINT_B64" \
+          BEGET_S3_ACCESS_KEY_ID_B64="$BEGET_S3_ACCESS_KEY_ID_B64" \
+          BEGET_S3_SECRET_ACCESS_KEY_B64="$BEGET_S3_SECRET_ACCESS_KEY_B64" \
+          MIGRATE_TO_BEGET="$MIGRATE_TO_BEGET" \
           ASSEMBLY_API_KEY_B64="$ASSEMBLY_API_KEY_B64" \
           AI_PROVIDER_B64="$AI_PROVIDER_B64" \
           AI_MODEL_B64="$AI_MODEL_B64" \
@@ -67,6 +81,8 @@ jobs:
           R2_ACCESS_KEY_ID=$(printf '%s' "$R2_ACCESS_KEY_ID_B64" | base64 -d)
           R2_SECRET_ACCESS_KEY=$(printf '%s' "$R2_SECRET_ACCESS_KEY_B64" | base64 -d)
           R2_S3_ENDPOINT=$(printf '%s' "$R2_S3_ENDPOINT_B64" | base64 -d)
+          BEGET_S3_ACCESS_KEY_ID=$(printf '%s' "$BEGET_S3_ACCESS_KEY_ID_B64" | base64 -d)
+          BEGET_S3_SECRET_ACCESS_KEY=$(printf '%s' "$BEGET_S3_SECRET_ACCESS_KEY_B64" | base64 -d)
           ASSEMBLY_API_KEY=$(printf '%s' "$ASSEMBLY_API_KEY_B64" | base64 -d)
           AI_PROVIDER=$(printf '%s' "$AI_PROVIDER_B64" | base64 -d)
           AI_MODEL=$(printf '%s' "$AI_MODEL_B64" | base64 -d)
@@ -84,6 +100,85 @@ jobs:
             git -C /opt/cap checkout -B main origin/main
           fi
 
+          STORAGE_ENDPOINT="$R2_S3_ENDPOINT"
+          STORAGE_BUCKET=cap-media
+          STORAGE_REGION=auto
+          STORAGE_ACCESS_KEY="$R2_ACCESS_KEY_ID"
+          STORAGE_SECRET_KEY="$R2_SECRET_ACCESS_KEY"
+
+          if [ "$MIGRATE_TO_BEGET" = "true" ]; then
+            test -n "$BEGET_S3_ACCESS_KEY_ID"
+            test -n "$BEGET_S3_SECRET_ACCESS_KEY"
+            BEGET_S3_ENDPOINT=https://s3.ru1.storage.beget.cloud
+            BEGET_S3_BUCKET=d5e16f195c6b-cap
+
+            cat > /tmp/cap-beget-cors.json <<'CORS'
+          {
+            "CORSRules": [
+              {
+                "AllowedOrigins": ["https://cap.mayorov.team"],
+                "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+                "AllowedHeaders": ["*"],
+                "ExposeHeaders": ["ETag", "Content-Length", "Content-Range"],
+                "MaxAgeSeconds": 3600
+              }
+            ]
+          }
+          CORS
+
+            docker run --rm \
+              -e AWS_ACCESS_KEY_ID="$BEGET_S3_ACCESS_KEY_ID" \
+              -e AWS_SECRET_ACCESS_KEY="$BEGET_S3_SECRET_ACCESS_KEY" \
+              -e AWS_DEFAULT_REGION=ru1 \
+              -e AWS_PAGER= \
+              -v /tmp/cap-beget-cors.json:/tmp/cors.json:ro \
+              amazon/aws-cli:2.27.42 s3api put-bucket-cors \
+              --bucket "$BEGET_S3_BUCKET" \
+              --endpoint-url "$BEGET_S3_ENDPOINT" \
+              --cors-configuration file:///tmp/cors.json
+
+            RCLONE_CONFIG=/tmp/cap-rclone.conf
+            umask 077
+            cat > "$RCLONE_CONFIG" <<EOF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = $R2_ACCESS_KEY_ID
+          secret_access_key = $R2_SECRET_ACCESS_KEY
+          endpoint = $R2_S3_ENDPOINT
+          no_check_bucket = true
+
+          [beget]
+          type = s3
+          provider = Other
+          access_key_id = $BEGET_S3_ACCESS_KEY_ID
+          secret_access_key = $BEGET_S3_SECRET_ACCESS_KEY
+          endpoint = $BEGET_S3_ENDPOINT
+          region = ru1
+          force_path_style = true
+          no_check_bucket = true
+          EOF
+
+            docker run --rm \
+              -v "$RCLONE_CONFIG:/config/rclone/rclone.conf:ro" \
+              rclone/rclone:latest copy \
+              r2:cap-media beget:"$BEGET_S3_BUCKET" \
+              --stats-one-line --stats 10s
+
+            docker run --rm \
+              -v "$RCLONE_CONFIG:/config/rclone/rclone.conf:ro" \
+              rclone/rclone:latest check \
+              r2:cap-media beget:"$BEGET_S3_BUCKET" \
+              --one-way --size-only
+
+            rm -f "$RCLONE_CONFIG" /tmp/cap-beget-cors.json
+            STORAGE_ENDPOINT="$BEGET_S3_ENDPOINT"
+            STORAGE_BUCKET="$BEGET_S3_BUCKET"
+            STORAGE_REGION=ru1
+            STORAGE_ACCESS_KEY="$BEGET_S3_ACCESS_KEY_ID"
+            STORAGE_SECRET_KEY="$BEGET_S3_SECRET_ACCESS_KEY"
+          fi
+
           umask 077
           if [ ! -f /opt/cap/.env.generated ]; then
             cat > /opt/cap/.env.generated <<EOF
@@ -98,12 +193,12 @@ jobs:
           cat /opt/cap/.env.generated > /opt/cap/.env
           cat >> /opt/cap/.env <<EOF
           CAP_URL=https://cap.mayorov.team
-          S3_PUBLIC_ENDPOINT=$R2_S3_ENDPOINT
-          S3_INTERNAL_ENDPOINT=$R2_S3_ENDPOINT
-          CAP_AWS_ACCESS_KEY=$R2_ACCESS_KEY_ID
-          CAP_AWS_SECRET_KEY=$R2_SECRET_ACCESS_KEY
-          CAP_AWS_BUCKET=cap-media
-          CAP_AWS_REGION=auto
+          S3_PUBLIC_ENDPOINT=$STORAGE_ENDPOINT
+          S3_INTERNAL_ENDPOINT=$STORAGE_ENDPOINT
+          CAP_AWS_ACCESS_KEY=$STORAGE_ACCESS_KEY
+          CAP_AWS_SECRET_KEY=$STORAGE_SECRET_KEY
+          CAP_AWS_BUCKET=$STORAGE_BUCKET
+          CAP_AWS_REGION=$STORAGE_REGION
           S3_PATH_STYLE=true
           CAP_VIDEOS_DEFAULT_PUBLIC=true
           RESEND_API_KEY=
