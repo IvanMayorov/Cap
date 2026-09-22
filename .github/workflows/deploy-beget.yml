@@ -119,7 +119,6 @@ jobs:
                 "AllowedOrigins": ["https://cap.mayorov.team"],
                 "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
                 "AllowedHeaders": ["*"],
-                "ExposeHeaders": ["ETag", "Content-Length", "Content-Range"],
                 "MaxAgeSeconds": 3600
               }
             ]
