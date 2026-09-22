@@ -63,6 +63,11 @@ export const getRequestAccessibleS3Endpoint = (
 	}
 };
 
+// Some S3-compatible stores (e.g. Beget) return an unquoted ETag in the
+// CompleteMultipartUpload body while HEAD/GET return the quoted entity-tag.
+const toEntityTag = (etag: string | undefined) =>
+	!etag || etag.startsWith('"') || etag.startsWith("W/") ? etag : `"${etag}"`;
+
 const wrapS3Promise = <T>(
 	promise: Promise<T> | Effect.Effect<Promise<T>, Cause.UnknownException>,
 ): Effect.Effect<T, S3Error, never> =>
@@ -451,7 +456,11 @@ export const createS3BucketAccess = Effect.gen(function* () {
 									UploadId: uploadId,
 									...args,
 								}),
-							),
+							)
+							.then((result) => ({
+								...result,
+								ETag: toEntityTag(result.ETag),
+							})),
 						),
 					),
 				),
