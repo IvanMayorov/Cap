@@ -1,6 +1,8 @@
 DESCRIPTION >
     Aggregated page views per tenant/path.
 
+TOKEN cap_backend READ
+
 SCHEMA >
 	tenant_id LowCardinality(String),
 	date Date,

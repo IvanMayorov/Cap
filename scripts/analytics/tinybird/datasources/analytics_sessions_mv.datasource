@@ -1,6 +1,8 @@
 DESCRIPTION >
     Session level facts derived from analytics events.
 
+TOKEN cap_backend READ
+
 SCHEMA >
 	tenant_id LowCardinality(String),
 	date Date,

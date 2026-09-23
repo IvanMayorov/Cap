@@ -49,6 +49,8 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
+          TINYBIRD_HOST: ${{ secrets.TINYBIRD_HOST }}
         run: |
           set -euo pipefail
           test -n "$R2_ACCESS_KEY_ID"
@@ -67,6 +69,8 @@ jobs:
           GROQ_API_KEY_B64=$(printf '%s' "$GROQ_API_KEY" | base64 | tr -d '\n')
           OPENAI_API_KEY_B64=$(printf '%s' "$OPENAI_API_KEY" | base64 | tr -d '\n')
           ANTHROPIC_API_KEY_B64=$(printf '%s' "$ANTHROPIC_API_KEY" | base64 | tr -d '\n')
+          TINYBIRD_TOKEN_B64=$(printf '%s' "$TINYBIRD_TOKEN" | base64 | tr -d '\n')
+          TINYBIRD_HOST_B64=$(printf '%s' "$TINYBIRD_HOST" | base64 | tr -d '\n')
           REPOSITORY_URL="$REPOSITORY_URL" \
           R2_ACCESS_KEY_ID_B64="$R2_ACCESS_KEY_ID_B64" \
           R2_SECRET_ACCESS_KEY_B64="$R2_SECRET_ACCESS_KEY_B64" \
@@ -81,7 +85,9 @@ jobs:
           AI_API_KEY_B64="$AI_API_KEY_B64" \
           GROQ_API_KEY_B64="$GROQ_API_KEY_B64" \
           OPENAI_API_KEY_B64="$OPENAI_API_KEY_B64" \
-          ANTHROPIC_API_KEY_B64="$ANTHROPIC_API_KEY_B64" bash -s <<'REMOTE'
+          ANTHROPIC_API_KEY_B64="$ANTHROPIC_API_KEY_B64" \
+          TINYBIRD_TOKEN_B64="$TINYBIRD_TOKEN_B64" \
+          TINYBIRD_HOST_B64="$TINYBIRD_HOST_B64" bash -s <<'REMOTE'
           set -euo pipefail
 
           R2_ACCESS_KEY_ID=$(printf '%s' "$R2_ACCESS_KEY_ID_B64" | base64 -d)
@@ -97,6 +103,8 @@ jobs:
           GROQ_API_KEY=$(printf '%s' "$GROQ_API_KEY_B64" | base64 -d)
           OPENAI_API_KEY=$(printf '%s' "$OPENAI_API_KEY_B64" | base64 -d)
           ANTHROPIC_API_KEY=$(printf '%s' "$ANTHROPIC_API_KEY_B64" | base64 -d)
+          TINYBIRD_TOKEN=$(printf '%s' "$TINYBIRD_TOKEN_B64" | base64 -d)
+          TINYBIRD_HOST=$(printf '%s' "$TINYBIRD_HOST_B64" | base64 -d)
 
           install -d -m 700 /opt/cap
           if [ ! -d /opt/cap/.git ]; then
@@ -208,6 +216,10 @@ jobs:
           if [ -n "$GROQ_API_KEY" ]; then printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" >> /opt/cap/.env; fi
           if [ -n "$OPENAI_API_KEY" ]; then printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY" >> /opt/cap/.env; fi
           if [ -n "$ANTHROPIC_API_KEY" ]; then printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY" >> /opt/cap/.env; fi
+          if [ -n "$TINYBIRD_TOKEN" ]; then
+            printf 'TINYBIRD_TOKEN=%s\n' "$TINYBIRD_TOKEN" >> /opt/cap/.env
+            printf 'TINYBIRD_HOST=%s\n' "${TINYBIRD_HOST:-https://api.europe-west2.gcp.tinybird.co}" >> /opt/cap/.env
+          fi
           if [ -n "$AI_API_KEY" ]; then
             printf 'AI_API_KEY=%s\n' "$AI_API_KEY" >> /opt/cap/.env
             printf 'AI_BASE_URL=%s\n' "${AI_BASE_URL:-https://api.hydraai.ru/v1}" >> /opt/cap/.env
