@@ -3,7 +3,7 @@ name: cap
 services:
   cap-web:
     # Upstream c5f22d7 + Beget multipart ETag fix (branch hotfix/beget-multipart-etag)
-    image: ghcr.io/ivanmayorov/cap-web@sha256:e6bdb9959195e75d403fc7f0ba62bb7e937581c4aab43a5515346864511d5d4c
+    image: ghcr.io/ivanmayorov/cap-web@sha256:2ae6587f33df03680815bd2fc5ad134ca9408570adf33a499002b855967e806e
     restart: unless-stopped
     depends_on:
       mysql:
