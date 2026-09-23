@@ -74,7 +74,7 @@ const waitForNextFrame = () =>
 		requestAnimationFrame(() => resolve());
 	});
 
-function waitForVideoMetadata(video: HTMLVideoElement) {
+export function waitForVideoMetadata(video: HTMLVideoElement) {
 	if (video.readyState >= 1) return Promise.resolve(true);
 	return new Promise<boolean>((resolve) => {
 		let timeoutId = 0;
@@ -92,7 +92,7 @@ function waitForVideoMetadata(video: HTMLVideoElement) {
 	});
 }
 
-function seekForCapture(video: HTMLVideoElement, time: number) {
+export function seekForCapture(video: HTMLVideoElement, time: number) {
 	return new Promise<boolean>((resolve) => {
 		let timeoutId = 0;
 		let frameId = 0;
